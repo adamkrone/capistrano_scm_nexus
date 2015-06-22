@@ -6,8 +6,12 @@ namespace :nexus do
   desc 'Copy artifact contents to releases'
   task :create_release do
     on release_roles :all do
+      execute :mkdir, '-p', repo_path
+
       within repo_path do
         strategy.download
+        upload!(File.expand_path(strategy.artifact_filename_with_ext),
+                File.join(fetch(:repo_path), strategy.artifact_filename_with_ext))
         execute :mkdir, '-p', release_path
         strategy.release
         strategy.cleanup

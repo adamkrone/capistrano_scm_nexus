@@ -1,22 +1,45 @@
 load File.expand_path('../tasks/nexus.rake', __FILE__)
 require 'capistrano/scm'
 require 'net/http'
+require 'nexus_cli'
 
 class Capistrano::Nexus < Capistrano::SCM
   module DefaultStrategy
-    def artifact_ext
-      'tgz'
+    def nexus_config
+      {
+        'url' => fetch(:nexus_url),
+        'repository' => fetch(:nexus_repository),
+        'username' => fetch(:nexus_username),
+        'password' => fetch(:nexus_password)
+      }
     end
 
-    def artifact_url
-      artifact_name = fetch(:nexus_artifact_name)
-      artifact_version = fetch(:nexus_artifact_version)
-      [ fetch(:nexus_endpoint), fetch(:nexus_repository), *fetch(:nexus_group_id).split('.'),
-        artifact_name, artifact_version, "#{artifact_name}-#{artifact_version}.#{artifact_ext}" ].join('/')
+    def remote
+      @_remote ||= NexusCli::RemoteFactory.create(nexus_config, nexus_ssl_verify)
     end
 
-    def local_filename
-      "#{fetch(:nexus_artifact_version)}.#{artifact_ext}"
+    def nexus_ssl_verify
+      @_ssl_verify ||= fetch(:nexus_ssl_verify, false)
+    end
+
+    def artifact_source
+      @_artifact_source ||= [fetch(:nexus_group_id),
+                             fetch(:nexus_artifact_name),
+                             fetch(:nexus_artifact_ext),
+                             fetch(:nexus_artifact_classifier),
+                             fetch(:nexus_artifact_version)].join(':')
+    end
+
+    def artifact_filename
+      "#{fetch(:nexus_artifact_name)}-#{fetch(:nexus_artifact_version)}-#{fetch(:nexus_artifact_classifier)}"
+    end
+
+    def artifact_filename_without_classifier
+      artifact_filename.gsub("-#{fetch(:nexus_artifact_classifier)}", '')
+    end
+
+    def artifact_filename_with_ext
+      "#{artifact_filename}.#{fetch(:nexus_artifact_ext)}"
     end
 
     def test
@@ -24,32 +47,31 @@ class Capistrano::Nexus < Capistrano::SCM
     end
 
     def check
-      begin
-        uri = URI(artifact_url)
-        res = Net::HTTP.new(uri.host).request_head(uri.path)
-        if res.code.to_i == 200
-          true
-        else
-          puts "Artifact not found at #{artifact_url}"
-          false
-        end
-      rescue StandardError => e
-        puts "Recieved error: #{e}, backtrace: \n#{e.backtrace}"
-        false
-      end
+      remote.get_artifact_info(artifact_source)
     end
 
     def download
-      context.execute :curl, '-o', local_filename, artifact_url
+      remote.pull_artifact(artifact_source)
     end
 
     def release
-      context.execute :tar, '-xzf', local_filename, '-C', fetch(:release_path)
+      context.execute :unzip, artifact_filename_with_ext, '-d', repo_path
+      context.execute :mv, File.join(artifact_filename_without_classifier, '*'), fetch(:release_path)
     end
 
     def cleanup
-      if test! " [ -f #{local_filename} ] "
-        context.execute :rm, local_filename
+      if test! " [ -f #{File.join(repo_path, artifact_filename_with_ext)} ] "
+        context.execute :rm, artifact_filename_with_ext
+      end
+
+      if test! " [ -d #{File.join(repo_path, artifact_filename)} ] "
+        context.execute :rm, artifact_filename
+      end
+
+      local_file = File.expand_path(artifact_filename_with_ext)
+
+      run_locally do
+        execute :rm, local_file
       end
     end
 
