@@ -10,8 +10,8 @@ namespace :nexus do
 
       within repo_path do
         strategy.download
-        upload!(File.expand_path(strategy.artifact_filename_with_ext),
-                File.join(fetch(:repo_path), strategy.artifact_filename_with_ext))
+        upload!(strategy.file_path,
+                File.join(fetch(:repo_path), strategy.file_name))
         execute :mkdir, '-p', release_path
         strategy.release
         strategy.cleanup

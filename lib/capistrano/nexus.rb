@@ -30,18 +30,6 @@ class Capistrano::Nexus < Capistrano::SCM
                              fetch(:nexus_artifact_version)].join(':')
     end
 
-    def artifact_filename
-      "#{fetch(:nexus_artifact_name)}-#{fetch(:nexus_artifact_version)}-#{fetch(:nexus_artifact_classifier)}"
-    end
-
-    def artifact_filename_without_classifier
-      artifact_filename.gsub("-#{fetch(:nexus_artifact_classifier)}", '')
-    end
-
-    def artifact_filename_with_ext
-      "#{artifact_filename}.#{fetch(:nexus_artifact_ext)}"
-    end
-
     def test
       test! " [ -d #{repo_path} ] "
     end
@@ -51,24 +39,36 @@ class Capistrano::Nexus < Capistrano::SCM
     end
 
     def download
-      remote.pull_artifact(artifact_source)
+      @_pulled_artifact = remote.pull_artifact(artifact_source)
+    end
+
+    def file_name
+      @_pulled_artifact.fetch(:file_name, nil)
+    end
+
+    def file_path
+      @_pulled_artifact.fetch(:file_path, nil)
+    end
+
+    def unzip_dir
+      "#{fetch(:nexus_artifact_name)}-#{fetch(:nexus_artifact_version)}"
     end
 
     def release
-      context.execute :unzip, artifact_filename_with_ext, '-d', repo_path
-      context.execute :mv, File.join(artifact_filename_without_classifier, '*'), fetch(:release_path)
+      context.execute :unzip, file_name, '-d', repo_path
+      context.execute :mv, File.join(unzip_dir, '*'), fetch(:release_path)
     end
 
     def cleanup
-      if test! " [ -f #{File.join(repo_path, artifact_filename_with_ext)} ] "
-        context.execute :rm, artifact_filename_with_ext
+      if test! " [ -f #{File.join(repo_path, file_name)} ] "
+        context.execute :rm, file_name
       end
 
-      if test! " [ -d #{File.join(repo_path, artifact_filename)} ] "
-        context.execute :rm, artifact_filename
+      if test! " [ -d #{File.join(repo_path, unzip_dir)} ] "
+        context.execute :rm, '-rf', unzip_dir
       end
 
-      local_file = File.expand_path(artifact_filename_with_ext)
+      local_file = file_path
 
       run_locally do
         execute :rm, local_file
