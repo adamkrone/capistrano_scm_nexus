@@ -6,12 +6,7 @@ require 'nexus_cli'
 class Capistrano::Nexus < Capistrano::SCM
   module DefaultStrategy
     def nexus_config
-      {
-        'url' => fetch(:nexus_url),
-        'repository' => fetch(:nexus_repository),
-        'username' => fetch(:nexus_username),
-        'password' => fetch(:nexus_password)
-      }
+      nil
     end
 
     def remote
