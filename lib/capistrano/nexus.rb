@@ -68,11 +68,7 @@ class Capistrano::Nexus < Capistrano::SCM
         context.execute :rm, '-rf', unzip_dir
       end
 
-      local_file = file_path
-
-      run_locally do
-        execute :rm, local_file
-      end
+      File.delete(file_path)
     end
 
     def fetch_revision
