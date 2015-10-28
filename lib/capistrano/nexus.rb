@@ -45,13 +45,19 @@ class Capistrano::Nexus < Capistrano::SCM
       @_pulled_artifact.fetch(:file_path, nil)
     end
 
-    def unzip_dir
+    def extract_dir
       "#{fetch(:nexus_artifact_name)}-#{fetch(:nexus_artifact_version)}"
     end
 
     def release
-      context.execute :unzip, file_name, '-d', repo_path
-      context.execute :mv, File.join(unzip_dir, '*'), fetch(:release_path)
+      case fetch(:nexus_artifact_ext)
+      when 'zip'
+        context.execute :unzip, file_name, '-d', repo_path
+      when 'tar.gz'
+        context.execute :tar, 'xzf', file_name, '-C', repo_path
+      end
+
+      context.execute :mv, File.join(extract_dir, '*'), fetch(:release_path)
     end
 
     def cleanup
@@ -59,11 +65,9 @@ class Capistrano::Nexus < Capistrano::SCM
         context.execute :rm, file_name
       end
 
-      if test! " [ -d #{File.join(repo_path, unzip_dir)} ] "
-        context.execute :rm, '-rf', unzip_dir
+      if test! " [ -d #{File.join(repo_path, extract_dir)} ] "
+        context.execute :rm, '-rf', extract_dir
       end
-
-      File.delete(file_path)
     end
 
     def fetch_revision
