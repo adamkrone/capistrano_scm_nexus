@@ -68,8 +68,6 @@ class Capistrano::Nexus < Capistrano::SCM
       if test! " [ -d #{File.join(repo_path, extract_dir)} ] "
         context.execute :rm, '-rf', extract_dir
       end
-
-      File.delete(file_path)
     end
 
     def fetch_revision
